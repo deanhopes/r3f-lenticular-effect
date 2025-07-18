@@ -8,7 +8,6 @@ function App() {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 0, 10], fov: 30 }}
       frameloop={frameloop}
       gl={(canvas) => {
         const renderer = new WebGPURenderer({
@@ -25,7 +24,7 @@ function App() {
         return renderer;
       }}
     >
-      <color attach="background" args={["#ececec"]} />
+      <color attach="background" args={["#8B9585"]} />
       <Experience />
     </Canvas>
   );

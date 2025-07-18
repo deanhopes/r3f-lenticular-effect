@@ -30,25 +30,22 @@ export const LenticularMaterial = ({
     const texB = texture(textureB);
 
     const repeatedUVs = uv().x.mul(uniforms.uNbDivisions).fract();
-    
-    // Basic step function for the original effect
+
     const hardStep = step(0.5, repeatedUVs);
-    
-    // When smoothness is 0, use the hard step
-    // When smoothness is higher, blend more of both textures
+
     const blendFactor = mix(hardStep, repeatedUVs, uniforms.uSmoothness);
+
+    const heightNode = mix(
+      uniforms.uHeight.negate(),
+      uniforms.uHeight,
+      repeatedUVs.x
+    );
 
     return {
       uniforms,
       nodes: {
         colorNode: mix(texA, texB, blendFactor),
-        positionNode: positionLocal.add(
-          vec3(
-            0,
-            0,
-            mix(uniforms.uHeight.negate(), uniforms.uHeight, repeatedUVs.x)
-          )
-        ),
+        positionNode: positionLocal.add(vec3(0, 0, heightNode)),
       },
     };
   }, []);
