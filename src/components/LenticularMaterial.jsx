@@ -1,7 +1,6 @@
 import { extend } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import {
-  color,
   mix,
   texture,
   uv,
@@ -19,22 +18,30 @@ export const LenticularMaterial = ({
   textureB,
   nbDivisions,
   height,
+  smoothness = 0.1,
 }) => {
   const { nodes, uniforms } = useMemo(() => {
     const uniforms = {
       uNbDivisions: uniform(nbDivisions),
       uHeight: uniform(height),
+      uSmoothness: uniform(smoothness),
     };
     const texA = texture(textureA);
     const texB = texture(textureB);
 
     const repeatedUVs = uv().x.mul(uniforms.uNbDivisions).fract();
-    const linedUVs = step(0.5, repeatedUVs);
+    
+    // Basic step function for the original effect
+    const hardStep = step(0.5, repeatedUVs);
+    
+    // When smoothness is 0, use the hard step
+    // When smoothness is higher, blend more of both textures
+    const blendFactor = mix(hardStep, repeatedUVs, uniforms.uSmoothness);
 
     return {
       uniforms,
       nodes: {
-        colorNode: mix(texA, texB, linedUVs),
+        colorNode: mix(texA, texB, blendFactor),
         positionNode: positionLocal.add(
           vec3(
             0,
@@ -49,7 +56,8 @@ export const LenticularMaterial = ({
   useEffect(() => {
     uniforms.uHeight.value = height;
     uniforms.uNbDivisions.value = nbDivisions;
-  }, [height, nbDivisions]);
+    uniforms.uSmoothness.value = smoothness;
+  }, [height, nbDivisions, smoothness]);
 
   return <meshStandardNodeMaterial {...nodes} />;
 };

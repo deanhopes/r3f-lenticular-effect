@@ -1,11 +1,18 @@
-import { OrbitControls } from "@react-three/drei";
+import { OrthographicCamera } from "@react-three/drei";
 import { LenticularMaterial } from "./LenticularMaterial";
 import { Environment } from "@react-three/drei";
 import { useControls } from "leva";
 import { useVideoTexture } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import { useRef } from "react";
+import * as THREE from "three";
 
 export const Experience = () => {
-  const { textureSet, nbDivisions, height } = useControls({
+  const cameraRef = useRef();
+  const meshRef = useRef();
+  const targetX = useRef(0);
+
+  const { textureSet, nbDivisions, height, smoothness } = useControls({
     textureSet: {
       value: "nostalgia",
       options: ["nostalgia", "vhs", "water"],
@@ -13,7 +20,7 @@ export const Experience = () => {
     nbDivisions: {
       min: 10,
       max: 100,
-      value: 10,
+      value: 40,
       step: 10,
       label: "Number of divisions",
     },
@@ -21,8 +28,15 @@ export const Experience = () => {
       min: 0.001,
       max: 0.2,
       value: 0.05,
-      step: 0.001,
+      step: 0.01,
       label: "Height",
+    },
+    smoothness: {
+      min: 0,
+      max: 0.5,
+      value: 0.26,
+      step: 0.01,
+      label: "Line Smoothness",
     },
   });
 
@@ -51,11 +65,42 @@ export const Experience = () => {
     ["water"]: videoWaterShirt,
   }[textureSet];
 
+  useFrame((state) => {
+    if (cameraRef.current && meshRef.current) {
+      // Update target position with reduced clamp values
+      targetX.current = Math.max(-0.01, Math.min(0.01, state.pointer.x * 0.1));
+
+      // Smooth interpolation for camera
+      cameraRef.current.rotation.y = THREE.MathUtils.lerp(
+        cameraRef.current.rotation.y,
+        targetX.current,
+        0.1
+      );
+
+      // Apply similar rotation to mesh
+      meshRef.current.rotation.y = THREE.MathUtils.lerp(
+        meshRef.current.rotation.y,
+        -targetX.current * 90, // Opposite direction with reduced intensity
+        0.1
+      );
+    }
+  });
+
   return (
     <>
-      <OrbitControls />
+      <OrthographicCamera
+        ref={cameraRef}
+        position={[0, 0, 10]}
+        makeDefault
+        left={-1}
+        right={1}
+        top={1}
+        bottom={-1}
+        near={0.1}
+        far={1000}
+      />
       <Environment preset="sunset" />
-      <mesh>
+      <mesh ref={meshRef}>
         <planeGeometry args={[(1 * 51) / 91, 1, nbDivisions * 2, 1]} />
         <LenticularMaterial
           key={textureSet}
@@ -63,6 +108,7 @@ export const Experience = () => {
           textureB={textureB}
           nbDivisions={nbDivisions}
           height={height}
+          smoothness={smoothness}
         />
       </mesh>
     </>

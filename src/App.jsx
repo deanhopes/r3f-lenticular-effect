@@ -1,6 +1,5 @@
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
-
 import { useState } from "react";
 import { WebGPURenderer } from "three/webgpu";
 
@@ -9,7 +8,7 @@ function App() {
   return (
     <Canvas
       shadows
-      camera={{ position: [3, 3, 3], fov: 30 }}
+      camera={{ position: [0, 0, 10], fov: 30 }}
       frameloop={frameloop}
       gl={(canvas) => {
         const renderer = new WebGPURenderer({
