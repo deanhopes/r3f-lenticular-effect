@@ -3,8 +3,8 @@ import { LenticularMaterial } from "./LenticularMaterial";
 import { Environment } from "@react-three/drei";
 import { useControls } from "leva";
 import { useVideoTexture } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useRef, useEffect } from "react";
 import * as THREE from "three";
 
 export const Experience = () => {
@@ -14,48 +14,55 @@ export const Experience = () => {
   const meshRef3 = useRef();
   const groupRef = useRef();
   const targetX = useRef(0);
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartRotation = useRef(0);
+  const snapTarget = useRef(null);
 
-  const { nbDivisions, height, smoothness, radius, rotation, autoRotate } = useControls({
-    nbDivisions: {
-      min: 10,
-      max: 100,
-      value: 40,
-      step: 10,
-      label: "Number of divisions",
-    },
-    height: {
-      min: 0.001,
-      max: 0.2,
-      value: 0.05,
-      step: 0.01,
-      label: "Height",
-    },
-    smoothness: {
-      min: 0,
-      max: 0.5,
-      value: 0.26,
-      step: 0.01,
-      label: "Line Smoothness",
-    },
-    radius: {
-      min: 1,
-      max: 5,
-      value: 2,
-      step: 0.1,
-      label: "Circle Radius",
-    },
-    rotation: {
-      min: 0,
-      max: Math.PI * 2,
-      value: 0,
-      step: 0.01,
-      label: "Circle Rotation",
-    },
-    autoRotate: {
-      value: false,
-      label: "Auto Rotate",
-    },
-  });
+  const { gl } = useThree();
+
+  const { nbDivisions, height, smoothness, radius, rotation, autoRotate } =
+    useControls({
+      nbDivisions: {
+        min: 10,
+        max: 100,
+        value: 40,
+        step: 10,
+        label: "Number of divisions",
+      },
+      height: {
+        min: 0.001,
+        max: 0.2,
+        value: 0.05,
+        step: 0.01,
+        label: "Height",
+      },
+      smoothness: {
+        min: 0,
+        max: 0.5,
+        value: 0.26,
+        step: 0.01,
+        label: "Line Smoothness",
+      },
+      radius: {
+        min: 1,
+        max: 5,
+        value: 2,
+        step: 0.1,
+        label: "Circle Radius",
+      },
+      rotation: {
+        min: 0,
+        max: Math.PI * 2,
+        value: 0,
+        step: 0.01,
+        label: "Circle Rotation",
+      },
+      autoRotate: {
+        value: false,
+        label: "Auto Rotate",
+      },
+    });
 
   const videoNostalgiaTrain = useVideoTexture(
     "textures/nostalgia/nostalgia-train.mp4"
@@ -89,71 +96,12 @@ export const Experience = () => {
     key: "water",
   };
 
-  // Store the current rotation value
-  const currentRotation = useRef(0);
-
-  useFrame((state, delta) => {
-    if (
-      cameraRef.current &&
-      meshRef1.current &&
-      meshRef2.current &&
-      meshRef3.current &&
-      groupRef.current
-    ) {
-      // Update target position with reduced clamp values
-      targetX.current = Math.max(-0.02, Math.min(0.02, state.pointer.x * 0.1));
-
-      // Smooth interpolation for camera
-      cameraRef.current.rotation.y = THREE.MathUtils.lerp(
-        cameraRef.current.rotation.y,
-        targetX.current,
-        0.05
-      );
-      
-      // Auto-rotate if enabled
-      if (autoRotate) {
-        currentRotation.current = (currentRotation.current + delta * 0.5) % (Math.PI * 2);
-        groupRef.current.rotation.y = currentRotation.current;
-      } else {
-        // Update group rotation from Leva control
-        groupRef.current.rotation.y = rotation;
-        currentRotation.current = rotation;
-      }
-      
-      // Get camera position in world space
-      const cameraPosition = new THREE.Vector3();
-      state.camera.getWorldPosition(cameraPosition);
-      
-      // Make each mesh face the camera using billboard technique
-      const meshRefs = [meshRef1, meshRef2, meshRef3];
-      meshRefs.forEach((meshRef) => {
-        if (meshRef.current) {
-          // Get mesh world position
-          const meshWorldPosition = new THREE.Vector3();
-          meshRef.current.getWorldPosition(meshWorldPosition);
-          
-          // Calculate direction to camera
-          const directionToCamera = new THREE.Vector3().subVectors(
-            cameraPosition, 
-            meshWorldPosition
-          ).normalize();
-          
-          // Create a quaternion for y-axis rotation only
-          const yRotation = Math.atan2(directionToCamera.x, directionToCamera.z);
-          
-          // Apply rotation to mesh, compensating for group rotation
-          meshRef.current.rotation.y = yRotation - groupRef.current.rotation.y;
-          
-          // Apply the lenticular effect rotation
-          meshRef.current.rotation.y += -targetX.current * 15;
-        }
-      });
-    }
-  });
+  const totalLenticularItems = 3;
+  const anglePerSlice = (2 * Math.PI) / totalLenticularItems;
 
   // Calculate positions for meshes in a circle
-  const calculateCirclePosition = (index, total, radius) => {
-    const angle = (index / total) * Math.PI * 2;
+  const calculateCirclePosition = (index, radius) => {
+    const angle = (index / totalLenticularItems) * Math.PI * 2;
     return {
       x: Math.sin(angle) * radius,
       y: 0,
@@ -161,13 +109,78 @@ export const Experience = () => {
     };
   };
 
-  const pos1 = calculateCirclePosition(0, 3, radius);
-  const pos2 = calculateCirclePosition(1, 3, radius);
-  const pos3 = calculateCirclePosition(2, 3, radius);
+  const pos1 = calculateCirclePosition(0, radius);
+  const pos2 = calculateCirclePosition(1, radius);
+  const pos3 = calculateCirclePosition(2, radius);
+
+  // --- Drag and Snap Logic ---
+  useEffect(() => {
+    const handlePointerDown = (e) => {
+      dragging.current = true;
+      dragStartX.current = e.clientX;
+      // Normalize the rotation to [0, 2PI) at drag start
+      let startRot = groupRef.current.rotation.y % (2 * Math.PI);
+      if (startRot < 0) startRot += 2 * Math.PI;
+      dragStartRotation.current = startRot;
+      groupRef.current.rotation.y = startRot;
+      snapTarget.current = null;
+      console.log('[PointerDown] Raw rotation:', groupRef.current.rotation.y, 'Normalized:', startRot);
+    };
+    const handlePointerMove = (e) => {
+      if (!dragging.current) return;
+      const deltaX = e.clientX - dragStartX.current;
+      const sensitivity = 0.008;
+      // Always keep rotation in [0, 2PI)
+      let newRot = dragStartRotation.current - deltaX * sensitivity;
+      newRot = newRot % (2 * Math.PI);
+      if (newRot < 0) newRot += 2 * Math.PI;
+      groupRef.current.rotation.y = newRot;
+    };
+    const handlePointerUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      // Snap to nearest slice within [0, 2PI)
+      let currentRotation = groupRef.current.rotation.y;
+      let normalized = currentRotation % (2 * Math.PI);
+      if (normalized < 0) normalized += 2 * Math.PI;
+      let nearestIndex = Math.round(normalized / anglePerSlice) % totalLenticularItems;
+      let target = nearestIndex * anglePerSlice;
+      // Minimal rotation diff
+      let diff = target - currentRotation;
+      diff = ((diff + Math.PI) % (2 * Math.PI)) - Math.PI;
+      let snapTo = currentRotation + diff;
+      snapTarget.current = snapTo;
+      console.log('[PointerUp] Raw rotation:', currentRotation, 'Normalized:', normalized, 'Snap to angle:', target, 'Nearest index:', nearestIndex, 'Diff:', diff, 'SnapTo:', snapTo);
+    };
+    const dom = gl.domElement;
+    dom.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      dom.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [gl, anglePerSlice, totalLenticularItems]);
+
+  // Animate snapping, always keep rotation in [0, 2PI)
+  useFrame((state, delta) => {
+    if (snapTarget.current !== null && groupRef.current) {
+      let current = groupRef.current.rotation.y;
+      let target = snapTarget.current;
+      // Damping toward minimal rotation
+      let newRot = THREE.MathUtils.damp(current, target, 8, delta);
+      groupRef.current.rotation.y = newRot;
+      if (Math.abs(newRot - target) < 0.001) {
+        groupRef.current.rotation.y = target;
+        snapTarget.current = null;
+      }
+    }
+  });
 
   return (
     <>
-      <OrbitControls />
+      <OrbitControls enabled={false} />
       <PerspectiveCamera
         ref={cameraRef}
         position={[0, 0, 15]}
