@@ -113,6 +113,11 @@ export const Experience = () => {
   const pos2 = calculateCirclePosition(1, radius);
   const pos3 = calculateCirclePosition(2, radius);
 
+  // Robust modulus helper for angles
+  function mod(n, m) {
+    return ((n % m) + m) % m;
+  }
+
   // --- Drag and Snap Logic ---
   useEffect(() => {
     const handlePointerDown = (e) => {
@@ -145,9 +150,8 @@ export const Experience = () => {
       if (normalized < 0) normalized += 2 * Math.PI;
       let nearestIndex = Math.round(normalized / anglePerSlice) % totalLenticularItems;
       let target = nearestIndex * anglePerSlice;
-      // Minimal rotation diff
-      let diff = target - currentRotation;
-      diff = ((diff + Math.PI) % (2 * Math.PI)) - Math.PI;
+      // Minimal rotation diff using robust modulus
+      let diff = mod(target - currentRotation + Math.PI, 2 * Math.PI) - Math.PI;
       let snapTo = currentRotation + diff;
       snapTarget.current = snapTo;
       console.log('[PointerUp] Raw rotation:', currentRotation, 'Normalized:', normalized, 'Snap to angle:', target, 'Nearest index:', nearestIndex, 'Diff:', diff, 'SnapTo:', snapTo);
