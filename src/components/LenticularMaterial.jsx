@@ -1,5 +1,6 @@
 import { extend } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
+import * as THREE from "three";
 import {
   mix,
   texture,
@@ -56,5 +57,5 @@ export const LenticularMaterial = ({
     uniforms.uSmoothness.value = smoothness;
   }, [height, nbDivisions, smoothness]);
 
-  return <meshStandardNodeMaterial {...nodes} />;
+  return <meshStandardNodeMaterial {...nodes} side={THREE.DoubleSide} />;
 };
